@@ -1,22 +1,22 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 @main
 struct BigClockApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            PreferencesView(preferences: appDelegate.preferences)
         }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let preferences = ClockPreferences()
+    let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
-    private var preferencesWindow: NSWindow?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -66,10 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func showPreferences(_ sender: Any?) {
-        let window = preferencesWindow ?? makePreferencesWindow()
-        preferencesWindow = window
         NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(sender)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: sender)
     }
 
     @objc
@@ -127,24 +125,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
         self.statusItem = statusItem
-    }
-
-    private func makePreferencesWindow() -> NSWindow {
-        let hostingController = NSHostingController(
-            rootView: PreferencesView(preferences: preferences)
-        )
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Preferences"
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.contentViewController = hostingController
-        window.toolbarStyle = .preference
-        return window
     }
 
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
