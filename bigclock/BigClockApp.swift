@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreGraphics
 
 @MainActor
 @main
@@ -14,10 +15,11 @@ struct BigClockApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
     private var statusItem: NSStatusItem?
+    private let placementStore = ClockWindowPlacementStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -58,10 +60,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.orderFrontRegardless()
 
         clockPanel = panel
+        panel.delegate = self
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        saveClockPlacement()
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard
+            let panel = notification.object as? NSPanel,
+            panel == clockPanel
+        else {
+            return
+        }
+
+        saveClockPlacement(for: panel)
     }
 
     @objc
@@ -78,7 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             x: visibleFrame.midX - (panel.frame.width / 2),
             y: visibleFrame.midY - (panel.frame.height / 2)
         )
-        panel.setFrameOrigin(origin)
+        panel.setFrameOrigin(clampedOrigin(for: panel.frame.size, proposedOrigin: origin, in: visibleFrame))
+        saveClockPlacement(for: panel)
     }
 
     @objc
@@ -151,12 +170,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func place(panel: NSPanel) {
-        guard let screenFrame = NSScreen.main?.visibleFrame else { return }
-        let inset: CGFloat = 48
-        let origin = NSPoint(
-            x: screenFrame.maxX - panel.frame.width - inset,
-            y: screenFrame.maxY - panel.frame.height - inset
-        )
+        let placement = placementStore.load()
+        let matchedScreen = placement.flatMap { screen(matching: $0) }
+        let targetScreen = matchedScreen ?? NSScreen.main
+        guard let visibleFrame = targetScreen?.visibleFrame else { return }
+
+        let origin: NSPoint
+        if let placement, matchedScreen != nil {
+            origin = restoredOrigin(for: panel.frame.size, placement: placement, in: visibleFrame)
+        } else {
+            origin = defaultOrigin(for: panel.frame.size, in: visibleFrame)
+        }
+
         panel.setFrameOrigin(origin)
     }
 
@@ -178,11 +203,146 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         if let visibleFrame = containingScreen(for: panel)?.visibleFrame {
-            newOrigin.x = min(max(newOrigin.x, visibleFrame.minX), visibleFrame.maxX - frameSize.width)
-            newOrigin.y = min(max(newOrigin.y, visibleFrame.minY), visibleFrame.maxY - frameSize.height)
+            newOrigin = clampedOrigin(for: frameSize, proposedOrigin: newOrigin, in: visibleFrame)
         }
 
         let newFrame = NSRect(origin: newOrigin, size: frameSize)
         panel.setFrame(newFrame, display: true, animate: false)
+        saveClockPlacement(for: panel)
+    }
+
+    private func saveClockPlacement() {
+        guard let panel = clockPanel else { return }
+        saveClockPlacement(for: panel)
+    }
+
+    private func saveClockPlacement(for panel: NSPanel) {
+        guard let screen = containingScreen(for: panel) else { return }
+
+        let visibleFrame = screen.visibleFrame
+        let clamped = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: visibleFrame)
+        let availableWidth = max(visibleFrame.width - panel.frame.width, 0)
+        let availableHeight = max(visibleFrame.height - panel.frame.height, 0)
+
+        let horizontalFraction = availableWidth > 0
+            ? Double((clamped.x - visibleFrame.minX) / availableWidth)
+            : 0
+        let verticalFraction = availableHeight > 0
+            ? Double((clamped.y - visibleFrame.minY) / availableHeight)
+            : 0
+
+        placementStore.save(
+            ClockWindowPlacement(
+                displayUUID: screen.displayUUIDString,
+                displayID: screen.displayID,
+                horizontalFraction: min(max(horizontalFraction, 0), 1),
+                verticalFraction: min(max(verticalFraction, 0), 1)
+            )
+        )
+    }
+
+    private func screen(matching placement: ClockWindowPlacement) -> NSScreen? {
+        if let displayUUID = placement.displayUUID,
+           let screen = NSScreen.screens.first(where: { $0.displayUUIDString == displayUUID }) {
+            return screen
+        }
+
+        if let displayID = placement.displayID,
+           let screen = NSScreen.screens.first(where: { $0.displayID == displayID }) {
+            return screen
+        }
+
+        return nil
+    }
+
+    private func restoredOrigin(for panelSize: NSSize, placement: ClockWindowPlacement, in visibleFrame: NSRect) -> NSPoint {
+        let availableWidth = max(visibleFrame.width - panelSize.width, 0)
+        let availableHeight = max(visibleFrame.height - panelSize.height, 0)
+        let horizontalFraction = min(max(placement.horizontalFraction, 0), 1)
+        let verticalFraction = min(max(placement.verticalFraction, 0), 1)
+        let proposedOrigin = NSPoint(
+            x: visibleFrame.minX + (CGFloat(horizontalFraction) * availableWidth),
+            y: visibleFrame.minY + (CGFloat(verticalFraction) * availableHeight)
+        )
+
+        return clampedOrigin(for: panelSize, proposedOrigin: proposedOrigin, in: visibleFrame)
+    }
+
+    private func defaultOrigin(for panelSize: NSSize, in visibleFrame: NSRect) -> NSPoint {
+        let inset: CGFloat = 48
+        let proposedOrigin = NSPoint(
+            x: visibleFrame.maxX - panelSize.width - inset,
+            y: visibleFrame.maxY - panelSize.height - inset
+        )
+
+        return clampedOrigin(for: panelSize, proposedOrigin: proposedOrigin, in: visibleFrame)
+    }
+
+    private func clampedOrigin(for panelSize: NSSize, proposedOrigin: NSPoint, in visibleFrame: NSRect) -> NSPoint {
+        let maxX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
+        let maxY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
+
+        return NSPoint(
+            x: min(max(proposedOrigin.x, visibleFrame.minX), maxX),
+            y: min(max(proposedOrigin.y, visibleFrame.minY), maxY)
+        )
+    }
+}
+
+private struct ClockWindowPlacement: Codable {
+    let displayUUID: String?
+    let displayID: UInt32?
+    let horizontalFraction: Double
+    let verticalFraction: Double
+}
+
+private struct ClockWindowPlacementStore {
+    private let userDefaults: UserDefaults
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func load() -> ClockWindowPlacement? {
+        guard
+            let data = userDefaults.data(forKey: Keys.placement),
+            let placement = try? JSONDecoder().decode(ClockWindowPlacement.self, from: data)
+        else {
+            return nil
+        }
+
+        return placement
+    }
+
+    func save(_ placement: ClockWindowPlacement) {
+        guard let data = try? JSONEncoder().encode(placement) else { return }
+        userDefaults.set(data, forKey: Keys.placement)
+    }
+
+    private enum Keys {
+        static let placement = "clockWindowPlacement"
+    }
+}
+
+private extension NSScreen {
+    var displayID: UInt32? {
+        guard
+            let screenNumber = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            return nil
+        }
+
+        return screenNumber.uint32Value
+    }
+
+    var displayUUIDString: String? {
+        guard
+            let displayID,
+            let displayUUID = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue()
+        else {
+            return nil
+        }
+
+        return CFUUIDCreateString(nil, displayUUID) as String
     }
 }
