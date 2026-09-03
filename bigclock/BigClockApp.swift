@@ -13,7 +13,9 @@ struct BigClockApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
+    private var preferencesWindow: NSWindow?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -40,7 +42,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isReleasedWhenClosed = false
         panel.isExcludedFromWindowsMenu = true
 
-        let hostingView = NSHostingView(rootView: ContentView())
+        let hostingView = NSHostingView(
+            rootView: ContentView(
+                preferences: preferences,
+                onIdealSizeChange: { [weak self] size in
+                    self?.resizeClockPanel(to: size)
+                }
+            )
+        )
         panel.contentView = hostingView
         panel.layoutIfNeeded()
         panel.setContentSize(hostingView.fittingSize)
@@ -52,7 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc
     private func showPreferences(_ sender: Any?) {
-        NSLog("Preferences action is not implemented yet.")
+        let window = preferencesWindow ?? makePreferencesWindow()
+        preferencesWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(sender)
     }
 
     @objc
@@ -112,6 +124,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusItem = statusItem
     }
 
+    private func makePreferencesWindow() -> NSWindow {
+        let hostingController = NSHostingController(
+            rootView: PreferencesView(preferences: preferences)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Preferences"
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.contentViewController = hostingController
+        window.toolbarStyle = .preference
+        return window
+    }
+
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
         let panelFrame = panel.frame
         let bestScreen = NSScreen.screens.max { lhs, rhs in
@@ -135,5 +165,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             y: screenFrame.maxY - panel.frame.height - inset
         )
         panel.setFrameOrigin(origin)
+    }
+
+    private func resizeClockPanel(to contentSize: CGSize) {
+        guard
+            let panel = clockPanel,
+            panel.contentRect(forFrameRect: panel.frame).size != contentSize
+        else {
+            return
+        }
+
+        let currentFrame = panel.frame
+        let centerPoint = NSPoint(x: currentFrame.midX, y: currentFrame.midY)
+        let frameSize = panel.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+
+        var newOrigin = NSPoint(
+            x: centerPoint.x - (frameSize.width / 2),
+            y: centerPoint.y - (frameSize.height / 2)
+        )
+
+        if let visibleFrame = containingScreen(for: panel)?.visibleFrame {
+            newOrigin.x = min(max(newOrigin.x, visibleFrame.minX), visibleFrame.maxX - frameSize.width)
+            newOrigin.y = min(max(newOrigin.y, visibleFrame.minY), visibleFrame.maxY - frameSize.height)
+        }
+
+        let newFrame = NSRect(origin: newOrigin, size: frameSize)
+        panel.setFrame(newFrame, display: true, animate: false)
     }
 }
