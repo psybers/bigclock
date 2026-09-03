@@ -59,8 +59,8 @@ final class ClockPreferences: ObservableObject {
             withFamily: fontFamily,
             traits: [],
             weight: 5,
-            size: fontSize
-        ) ?? .systemFont(ofSize: fontSize)
+            size: CGFloat(fontSize)
+        ) ?? .systemFont(ofSize: CGFloat(fontSize))
     }
 
     private let userDefaults: UserDefaults
@@ -133,7 +133,7 @@ final class ClockPreferences: ObservableObject {
     private static let defaultFontSize = 160.0
     private static let defaultTextColor = NSColor.systemYellow
     private static let defaultTextOpacity = 0.8
-    private static let defaultFontFamily = validatedFontFamily(NSFont.systemFont(ofSize: defaultFontSize).familyName ?? "")
+    private static let defaultFontFamily = validatedFontFamily(NSFont.systemFont(ofSize: CGFloat(defaultFontSize)).familyName ?? "")
 
     private enum Keys {
         static let fontFamily = "fontFamily"

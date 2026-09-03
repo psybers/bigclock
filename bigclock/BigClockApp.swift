@@ -59,6 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clockPanel = panel
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     @objc
     private func showPreferences(_ sender: Any?) {
         let window = preferencesWindow ?? makePreferencesWindow()
