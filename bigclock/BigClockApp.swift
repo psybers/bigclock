@@ -12,6 +12,7 @@ struct BigClockApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
