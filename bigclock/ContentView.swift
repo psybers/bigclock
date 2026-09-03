@@ -118,7 +118,7 @@ final class ClockPreferences: ObservableObject {
             return candidate
         }
 
-        return availableFontFamilies.first(where: { $0 == "Helvetica" }) ?? availableFontFamilies.first ?? "Helvetica"
+        return availableFontFamilies.first(where: { $0 == "System" }) ?? availableFontFamilies.first ?? "System"
     }
 
     private static func validatedFontSize(_ candidate: Double) -> Double {
@@ -129,7 +129,7 @@ final class ClockPreferences: ObservableObject {
         min(max(candidate, opacityRange.lowerBound), opacityRange.upperBound)
     }
 
-    private static let availableFontFamilies = NSFontManager.shared.availableFontFamilies.sorted()
+    private static let availableFontFamilies = ["System"] + NSFontManager.shared.availableFontFamilies.sorted()
     private static let defaultFontSize = 160.0
     private static let defaultTextColor = NSColor.systemYellow
     private static let defaultTextOpacity = 0.8
