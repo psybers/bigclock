@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000122B00000000000001 /* BigClockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000002B00000000000001 /* BigClockApp.swift */; };
 		A10000022B00000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012B00000000000001 /* ContentView.swift */; };
+		A10000122B00000000000001 /* BigClockApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000002B00000000000001 /* BigClockApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -242,8 +242,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = bigclock/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.psybers.bigclock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -262,8 +265,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = bigclock/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.psybers.bigclock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
