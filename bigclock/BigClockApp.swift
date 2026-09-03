@@ -73,8 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func windowDidMove(_ notification: Notification) {
         guard
+            let clockPanel,
             let panel = notification.object as? NSPanel,
-            panel == clockPanel
+            panel === clockPanel
         else {
             return
         }
