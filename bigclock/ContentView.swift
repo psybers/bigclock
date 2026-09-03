@@ -64,8 +64,8 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Text(viewModel.displayTime)
-                .font(.system(size: 180, weight: .bold, design: .rounded))
-                .foregroundStyle(.yellow.opacity(0.9))
+                .font(.system(size: 160))
+                .foregroundStyle(.yellow.opacity(0.8))
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
                 .fixedSize()
