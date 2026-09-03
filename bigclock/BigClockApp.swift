@@ -222,15 +222,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let visibleFrame = screen.visibleFrame
         let clamped = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: visibleFrame)
-        let availableWidth = max(visibleFrame.width - panel.frame.width, 0)
-        let availableHeight = max(visibleFrame.height - panel.frame.height, 0)
+        let clampedFrame = NSRect(origin: clamped, size: panel.frame.size)
 
-        let horizontalFraction = availableWidth > 0
-            ? Double((clamped.x - visibleFrame.minX) / availableWidth)
-            : 0
-        let verticalFraction = availableHeight > 0
-            ? Double((clamped.y - visibleFrame.minY) / availableHeight)
-            : 0
+        let horizontalFraction = visibleFrame.width > 0
+            ? Double((clampedFrame.midX - visibleFrame.minX) / visibleFrame.width)
+            : 0.5
+        let verticalFraction = visibleFrame.height > 0
+            ? Double((clampedFrame.midY - visibleFrame.minY) / visibleFrame.height)
+            : 0.5
 
         placementStore.save(
             ClockWindowPlacement(
@@ -257,13 +256,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func restoredOrigin(for panelSize: NSSize, placement: ClockWindowPlacement, in visibleFrame: NSRect) -> NSPoint {
-        let availableWidth = max(visibleFrame.width - panelSize.width, 0)
-        let availableHeight = max(visibleFrame.height - panelSize.height, 0)
         let horizontalFraction = min(max(placement.horizontalFraction, 0), 1)
         let verticalFraction = min(max(placement.verticalFraction, 0), 1)
+        let proposedCenter = NSPoint(
+            x: visibleFrame.minX + (CGFloat(horizontalFraction) * visibleFrame.width),
+            y: visibleFrame.minY + (CGFloat(verticalFraction) * visibleFrame.height)
+        )
         let proposedOrigin = NSPoint(
-            x: visibleFrame.minX + (CGFloat(horizontalFraction) * availableWidth),
-            y: visibleFrame.minY + (CGFloat(verticalFraction) * availableHeight)
+            x: proposedCenter.x - (panelSize.width / 2),
+            y: proposedCenter.y - (panelSize.height / 2)
         )
 
         return clampedOrigin(for: panelSize, proposedOrigin: proposedOrigin, in: visibleFrame)
