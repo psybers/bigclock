@@ -14,12 +14,29 @@ struct BigClockApp: App {
     }
 }
 
+/// Invisible helper view used purely to capture SwiftUI's `openSettings` environment action
+/// so it can be invoked from an AppKit `NSMenuItem`, which doesn't support `SettingsLink`.
+private struct OpenSettingsAccessor: View {
+    let onCapture: (@escaping () -> Void) -> Void
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                onCapture { openSettings() }
+            }
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
     private var statusItem: NSStatusItem?
     private let placementStore = ClockWindowPlacementStore()
+    private var settingsAccessorWindow: NSWindow?
+    private var openSettingsAction: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -119,7 +136,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(makePreferencesMenuItem())
+        menu.addItem(
+            withTitle: "Preferences",
+            action: #selector(showPreferences(_:)),
+            keyEquivalent: ""
+        )
         menu.addItem(
             withTitle: "Center on Screen",
             action: #selector(centerClockOnScreen(_:)),
@@ -135,24 +156,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
         self.statusItem = statusItem
+
+        installOpenSettingsAccessor()
     }
 
-    private func makePreferencesMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        item.title = "Preferences"
-
+    /// SwiftUI only exposes `openSettings` via the `Environment`, so we host an invisible
+    /// view once to capture that action and reuse it from the AppKit menu item below.
+    private func installOpenSettingsAccessor() {
         let hostingView = NSHostingView(
-            rootView: SettingsLink {
-                Text("Preferences")
+            rootView: OpenSettingsAccessor { [weak self] action in
+                self?.openSettingsAction = action
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 3)
         )
-        hostingView.frame = NSRect(x: 0, y: 0, width: 180, height: 22)
-        item.view = hostingView
+        hostingView.frame = .zero
+        let window = NSWindow(contentViewController: NSViewController())
+        window.contentViewController?.view = hostingView
+        settingsAccessorWindow = window
+    }
 
-        return item
+    @objc
+    private func showPreferences(_ sender: Any?) {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettingsAction?()
     }
 
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
