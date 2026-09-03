@@ -65,12 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc
-    private func showPreferences(_ sender: Any?) {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: sender)
-    }
-
-    @objc
     private func centerClockOnScreen(_ sender: Any?) {
         guard
             let panel = clockPanel,
@@ -105,11 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(
-            withTitle: "Preferences",
-            action: #selector(showPreferences(_:)),
-            keyEquivalent: ""
-        )
+        menu.addItem(makePreferencesMenuItem())
         menu.addItem(
             withTitle: "Center on Screen",
             action: #selector(centerClockOnScreen(_:)),
@@ -125,6 +115,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
         self.statusItem = statusItem
+    }
+
+    private func makePreferencesMenuItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = "Preferences"
+
+        let hostingView = NSHostingView(
+            rootView: SettingsLink {
+                Text("Preferences")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 3)
+        )
+        hostingView.frame = NSRect(x: 0, y: 0, width: 180, height: 22)
+        item.view = hostingView
+
+        return item
     }
 
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
