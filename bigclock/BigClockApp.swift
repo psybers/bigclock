@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(
             withTitle: "Preferences",
             action: #selector(showPreferences(_:)),
-            keyEquivalent: ","
+            keyEquivalent: ""
         )
         menu.addItem(
             withTitle: "Center on Screen",
@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(
             withTitle: "Quit",
             action: #selector(quitApplication(_:)),
-            keyEquivalent: "q"
+            keyEquivalent: ""
         )
 
         menu.items.forEach { $0.target = self }
