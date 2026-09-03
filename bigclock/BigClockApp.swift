@@ -1,18 +1,21 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 @main
 struct BigClockApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            PreferencesView(preferences: appDelegate.preferences)
         }
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
     private var statusItem: NSStatusItem?
 
@@ -40,7 +43,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isReleasedWhenClosed = false
         panel.isExcludedFromWindowsMenu = true
 
-        let hostingView = NSHostingView(rootView: ContentView())
+        let hostingView = NSHostingView(
+            rootView: ContentView(
+                preferences: preferences,
+                onIdealSizeChange: { [weak self] size in
+                    self?.resizeClockPanel(to: size)
+                }
+            )
+        )
         panel.contentView = hostingView
         panel.layoutIfNeeded()
         panel.setContentSize(hostingView.fittingSize)
@@ -50,9 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clockPanel = panel
     }
 
-    @objc
-    private func showPreferences(_ sender: Any?) {
-        NSLog("Preferences action is not implemented yet.")
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     @objc
@@ -90,11 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(
-            withTitle: "Preferences",
-            action: #selector(showPreferences(_:)),
-            keyEquivalent: ""
-        )
+        menu.addItem(makePreferencesMenuItem())
         menu.addItem(
             withTitle: "Center on Screen",
             action: #selector(centerClockOnScreen(_:)),
@@ -110,6 +115,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.forEach { $0.target = self }
         statusItem.menu = menu
         self.statusItem = statusItem
+    }
+
+    private func makePreferencesMenuItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        item.title = "Preferences"
+
+        let hostingView = NSHostingView(
+            rootView: SettingsLink {
+                Text("Preferences")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 3)
+        )
+        hostingView.frame = NSRect(x: 0, y: 0, width: 180, height: 22)
+        item.view = hostingView
+
+        return item
     }
 
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
@@ -135,5 +158,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             y: screenFrame.maxY - panel.frame.height - inset
         )
         panel.setFrameOrigin(origin)
+    }
+
+    private func resizeClockPanel(to contentSize: CGSize) {
+        guard
+            let panel = clockPanel,
+            panel.contentRect(forFrameRect: panel.frame).size != contentSize
+        else {
+            return
+        }
+
+        let currentFrame = panel.frame
+        let centerPoint = NSPoint(x: currentFrame.midX, y: currentFrame.midY)
+        let frameSize = panel.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+
+        var newOrigin = NSPoint(
+            x: centerPoint.x - (frameSize.width / 2),
+            y: centerPoint.y - (frameSize.height / 2)
+        )
+
+        if let visibleFrame = containingScreen(for: panel)?.visibleFrame {
+            newOrigin.x = min(max(newOrigin.x, visibleFrame.minX), visibleFrame.maxX - frameSize.width)
+            newOrigin.y = min(max(newOrigin.y, visibleFrame.minY), visibleFrame.maxY - frameSize.height)
+        }
+
+        let newFrame = NSRect(origin: newOrigin, size: frameSize)
+        panel.setFrame(newFrame, display: true, animate: false)
     }
 }
