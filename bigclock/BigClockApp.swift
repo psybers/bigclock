@@ -37,10 +37,84 @@ private final class ClockPanel: NSPanel {
     }
 }
 
+/// A hosting view that can report whether a given point renders an effectively
+/// opaque (non-transparent) pixel, used to let clicks on transparent regions of
+/// the clock window pass through to whatever is beneath it.
+private final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    private var alphaSamples: [UInt8]?
+    private var sampleSize: CGSize = .zero
+
+    func isOpaque(at point: NSPoint) -> Bool {
+        guard bounds.contains(point) else { return false }
+        refreshSamplesIfNeeded()
+
+        guard let alphaSamples, sampleSize.width > 0, sampleSize.height > 0 else { return true }
+
+        let width = Int(sampleSize.width)
+        let height = Int(sampleSize.height)
+        let x = Int(point.x)
+        // The bitmap context has a top-left origin, while AppKit view coordinates
+        // have a bottom-left origin, so flip the y-coordinate.
+        let y = height - Int(point.y) - 1
+
+        guard x >= 0, x < width, y >= 0, y < height else { return false }
+
+        let index = y * width + x
+        guard index >= 0, index < alphaSamples.count else { return false }
+
+        // Treat near-transparent pixels (anti-aliased glyph edges, etc.) as transparent.
+        return alphaSamples[index] > 10
+    }
+
+    private func refreshSamplesIfNeeded() {
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else {
+            alphaSamples = nil
+            return
+        }
+
+        let width = Int(size.width.rounded(.up))
+        let height = Int(size.height.rounded(.up))
+        guard width > 0, height > 0 else {
+            alphaSamples = nil
+            return
+        }
+
+        var buffer = [UInt8](repeating: 0, count: width * height * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard
+            let context = CGContext(
+                data: &buffer,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            alphaSamples = nil
+            return
+        }
+
+        layer?.render(in: context)
+
+        var alphaOnly = [UInt8](repeating: 0, count: width * height)
+        for index in 0..<(width * height) {
+            alphaOnly[index] = buffer[index * 4 + 3]
+        }
+
+        alphaSamples = alphaOnly
+        sampleSize = size
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferences = ClockPreferences()
     private var clockPanel: NSPanel?
+    private weak var clockHostingView: ClickThroughHostingView<ContentView>?
+    private var clickThroughTimer: Timer?
     private var statusItem: NSStatusItem?
     private let placementStore = ClockWindowPlacementStore()
     private var settingsAccessorWindow: NSWindow?
@@ -70,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.isExcludedFromWindowsMenu = true
 
-        let hostingView = NSHostingView(
+        let hostingView = ClickThroughHostingView(
             rootView: ContentView(
                 preferences: preferences,
                 onIdealSizeChange: { [weak self] size in
@@ -85,7 +159,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.orderFrontRegardless()
 
         clockPanel = panel
+        clockHostingView = hostingView
         panel.delegate = self
+        installClickThroughMonitor()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -94,6 +170,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         saveClockPlacement()
+        clickThroughTimer?.invalidate()
+    }
+
+    /// Polls the mouse position and toggles `ignoresMouseEvents` on the clock panel so
+    /// that clicks over transparent regions (outside the rendered clock text) pass through
+    /// to whatever window is beneath, while clicks on the text itself remain interactive.
+    /// Polling (rather than an event monitor) is required because once
+    /// `ignoresMouseEvents` is true, the panel stops receiving mouse-moved events, which
+    /// would otherwise make it impossible to detect re-entry into an opaque region.
+    private func installClickThroughMonitor() {
+        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            self?.updateClickThrough()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        clickThroughTimer = timer
+    }
+
+    private func updateClickThrough() {
+        guard let panel = clockPanel, let hostingView = clockHostingView else { return }
+
+        let mouseLocationInScreen = NSEvent.mouseLocation
+        guard panel.frame.contains(mouseLocationInScreen) else {
+            panel.ignoresMouseEvents = false
+            return
+        }
+
+        let pointInWindow = panel.convertPoint(fromScreen: mouseLocationInScreen)
+        let pointInView = hostingView.convert(pointInWindow, from: nil)
+        panel.ignoresMouseEvents = !hostingView.isOpaque(at: pointInView)
     }
 
     func windowDidMove(_ notification: Notification) {
