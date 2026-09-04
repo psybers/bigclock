@@ -8,6 +8,10 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+
+    permissions:
+      contents: write  # Gives permission to upload files to Releases
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,11 +40,18 @@ jobs:
         run: |
           # It is highly recommended to distribute as a DMG or a ZIP
           # Install 'create-dmg' via brew on the runner if you want a fancy DMG
-          hdiutil create -volname "BigClock Installer" -format UDZO -srcfolder build/BigClock.app -ov BigClock.dmg
+          hdiutil create -volname "BigClock Installer" -format UDZO -srcfolder build/BigClock.app -ov BigClock-${{ github.ref_name }}.dmg
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BigClock
-          path: BigClock.dmg
+          path: BigClock-${{ github.ref_name }}.dmg
+
+      - name: Upload DMG to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Uploads the file directly to the release matching current tag
+          gh release upload ${{ github.ref_name }} BigClock-${{ github.ref_name }}.dmg --clobber
 
