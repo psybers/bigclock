@@ -1,5 +1,7 @@
 # BigClock
 
+![Screenshot of BigClock](screenshot.png)
+
 BigClock was inspired by another BigClock app written by Sandor Szatmari. That
 app seemed to be abandoned and did not have an ARM version available that I
 could find. So I had Copilot vibe code this as a replacement.
