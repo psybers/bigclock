@@ -222,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
-        let visibleFrame = screen.visibleFrame
+        let visibleFrame = screen.frame
         let origin = NSPoint(
             x: visibleFrame.midX - (panel.frame.width / 2),
             y: visibleFrame.midY - (panel.frame.height / 2)
@@ -296,7 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
         let panelFrame = panel.frame
         let bestScreen = NSScreen.screens.max { lhs, rhs in
-            intersectionArea(of: lhs.visibleFrame, with: panelFrame) < intersectionArea(of: rhs.visibleFrame, with: panelFrame)
+            intersectionArea(of: lhs.frame, with: panelFrame) < intersectionArea(of: rhs.frame, with: panelFrame)
         }
 
         return bestScreen ?? panel.screen ?? NSScreen.main
@@ -312,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let placement = placementStore.load()
         let matchedScreen = placement.flatMap { screen(matching: $0) }
         let targetScreen = matchedScreen ?? NSScreen.main
-        guard let visibleFrame = targetScreen?.visibleFrame else { return }
+        guard let visibleFrame = targetScreen?.frame else { return }
 
         let origin: NSPoint
         if let placement, matchedScreen != nil {
@@ -333,16 +333,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let currentFrame = panel.frame
-        let centerPoint = NSPoint(x: currentFrame.midX, y: currentFrame.midY)
         let frameSize = panel.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
 
+        // Anchor by the horizontal center and the *top* edge rather than the overall
+        // center point. The clock's ideal width fluctuates slightly tick-to-tick (e.g.
+        // proportional digit widths), which would otherwise nudge the vertical origin by
+        // a fraction of a point every update. Repeated clamping of that drift against the
+        // screen edge is what caused the window to creep downward over time when placed
+        // near the top of the screen. Keeping the top edge fixed means a width-only change
+        // never moves the window vertically at all.
         var newOrigin = NSPoint(
-            x: centerPoint.x - (frameSize.width / 2),
-            y: centerPoint.y - (frameSize.height / 2)
+            x: currentFrame.midX - (frameSize.width / 2),
+            y: currentFrame.maxY - frameSize.height
         )
 
-        if let visibleFrame = containingScreen(for: panel)?.visibleFrame {
-            newOrigin = clampedOrigin(for: frameSize, proposedOrigin: newOrigin, in: visibleFrame)
+        // Clamp against the full screen frame (not visibleFrame) so that a clock
+        // intentionally positioned over the menu bar doesn't get shoved down every
+        // time its ideal size changes (e.g. as the displayed digits change width).
+        if let screenFrame = containingScreen(for: panel)?.frame {
+            newOrigin = clampedOrigin(for: frameSize, proposedOrigin: newOrigin, in: screenFrame)
         }
 
         let newFrame = NSRect(origin: newOrigin, size: frameSize)
@@ -358,15 +367,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func saveClockPlacement(for panel: NSPanel) {
         guard let screen = containingScreen(for: panel) else { return }
 
-        let visibleFrame = screen.visibleFrame
+        let visibleFrame = screen.frame
         let clamped = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: visibleFrame)
         let clampedFrame = NSRect(origin: clamped, size: panel.frame.size)
 
         let horizontalFraction = visibleFrame.width > 0
             ? Double((clampedFrame.midX - visibleFrame.minX) / visibleFrame.width)
             : 0.5
-        let verticalFraction = visibleFrame.height > 0
-            ? Double((clampedFrame.midY - visibleFrame.minY) / visibleFrame.height)
+        // Anchor vertically by the top edge (maxY), matching resizeClockPanel's
+        // top-anchored logic. Using the center here would let a differently-sized
+        // panel (e.g. before/after a font/text-width change) restore with its top
+        // edge in the wrong place even though the saved fraction was "correct".
+        let topFraction = visibleFrame.height > 0
+            ? Double((clampedFrame.maxY - visibleFrame.minY) / visibleFrame.height)
             : 0.5
 
         placementStore.save(
@@ -374,7 +387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 displayUUID: screen.displayUUIDString,
                 displayID: screen.displayID,
                 horizontalFraction: min(max(horizontalFraction, 0), 1),
-                verticalFraction: min(max(verticalFraction, 0), 1)
+                verticalFraction: min(max(topFraction, 0), 1)
             )
         )
     }
@@ -393,19 +406,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return nil
     }
 
-    private func restoredOrigin(for panelSize: NSSize, placement: ClockWindowPlacement, in visibleFrame: NSRect) -> NSPoint {
+    private func restoredOrigin(for panelSize: NSSize, placement: ClockWindowPlacement, in screenFrame: NSRect) -> NSPoint {
         let horizontalFraction = min(max(placement.horizontalFraction, 0), 1)
-        let verticalFraction = min(max(placement.verticalFraction, 0), 1)
-        let proposedCenter = NSPoint(
-            x: visibleFrame.minX + (CGFloat(horizontalFraction) * visibleFrame.width),
-            y: visibleFrame.minY + (CGFloat(verticalFraction) * visibleFrame.height)
-        )
+        let topFraction = min(max(placement.verticalFraction, 0), 1)
+        let proposedTop = screenFrame.minY + (CGFloat(topFraction) * screenFrame.height)
+        let proposedCenterX = screenFrame.minX + (CGFloat(horizontalFraction) * screenFrame.width)
         let proposedOrigin = NSPoint(
-            x: proposedCenter.x - (panelSize.width / 2),
-            y: proposedCenter.y - (panelSize.height / 2)
+            x: proposedCenterX - (panelSize.width / 2),
+            y: proposedTop - panelSize.height
         )
 
-        return clampedOrigin(for: panelSize, proposedOrigin: proposedOrigin, in: visibleFrame)
+        return clampedOrigin(for: panelSize, proposedOrigin: proposedOrigin, in: screenFrame)
     }
 
     private func defaultOrigin(for panelSize: NSSize, in visibleFrame: NSRect) -> NSPoint {
