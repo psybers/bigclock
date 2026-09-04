@@ -1,20 +1,26 @@
 # BigClock
 
-BigClock is a native macOS application built with Swift and SwiftUI.
+BigClock was inspired by another BigClock app written by Sandor Szatmari. That
+app seemed to be abandoned and did not have an ARM version available that I
+could find. So I had Copilot vibe code this as a replacement.
 
-## Project status
+Note that I don't know Swift and have never made a macOS app, so this thing
+might be a bit buggy. I want to keep it pretty basic, the set of features it
+has now is probably the most I will ever put into it. I welcome bug fix PRs.
 
-This repository currently contains the first floating clock implementation:
+## Installing
 
-- Native macOS app target (no cross-platform framework)
-- Deployment target: macOS 14+
-- Accessory/menu-bar style app configuration (`LSUIElement = true`, so no Dock icon)
-- Menu bar status item with clock icon and utility actions
-- Borderless transparent floating clock panel implemented with AppKit + SwiftUI
-- Large yellow local-time display (`h:mm`) that updates from system time every minute
-- Drag-to-move support by dragging the clock text
-- Window placement persistence across launches, including display-aware restoration
+The easiest way to install is via Homebrew:
 
-## Build
+```sh
+brew trust --cask hashicorp/tap/hashicorp-vagrant
+xattr -d com.apple.quarantine /Applications/BigClock.app
+```
 
-Open `/home/runner/work/bigclock/bigclock/BigClock.xcodeproj` in Xcode and build the `BigClock` scheme.
+Note that if you don't remove the quarantine, the app won't run.  You can do
+that with the above command, or by going into Settings and allowing the program
+to run.
+
+## Building From Source
+
+Open `BigClock.xcodeproj` in Xcode and build the `BigClock` scheme.
