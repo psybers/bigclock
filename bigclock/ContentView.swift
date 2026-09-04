@@ -195,6 +195,45 @@ final class ClockViewModel: ObservableObject {
     }()
 }
 
+struct StrokedTextView: NSViewRepresentable {
+    let text: String
+    let font: NSFont
+    let textColor: NSColor
+    let textOpacity: Double
+    let strokeColor: NSColor
+    let strokeWidth: CGFloat // Use negative values to keep fill + stroke
+    let shadowColor: NSColor
+    let shadowRadius: CGFloat
+    let shadowOffset: CGSize
+
+    func makeNSView(context: Context) -> NSTextField {
+        let label = NSTextField(labelWithString: "")
+        label.isEditable = false
+        label.isSelectable = false
+        label.drawsBackground = false
+        label.isBezeled = false
+        label.alignment = .center
+        return label
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        let shadow = NSShadow()
+        shadow.shadowColor = shadowColor
+        shadow.shadowOffset = NSSize(width: shadowOffset.width, height: -shadowOffset.height) // NSView Y-axis is inverted
+        shadow.shadowBlurRadius = shadowRadius
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: textColor.withAlphaComponent(textOpacity),
+            .strokeColor: strokeColor,
+            .strokeWidth: strokeWidth,
+            .shadow: shadow
+        ]
+
+        nsView.attributedStringValue = NSAttributedString(string: text, attributes: attributes)
+    }
+}
+
 struct ContentView: View {
     @ObservedObject var preferences: ClockPreferences
     let onIdealSizeChange: (CGSize) -> Void
@@ -203,15 +242,28 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Text(viewModel.displayTime)
-                .font(Font(preferences.clockFont))
-                .foregroundStyle(
-                    Color(nsColor: preferences.textColor)
-                        .opacity(preferences.textOpacity)
-                )
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .fixedSize()
+            StrokedTextView(
+                text: viewModel.displayTime,
+                font: preferences.clockFont, // Expects NSFont
+                textColor: preferences.textColor, // Expects NSColor
+                textOpacity: preferences.textOpacity,
+                strokeColor: NSColor.black.withAlphaComponent(0.4),
+                strokeWidth: 0.6,
+                shadowColor: NSColor.black,
+                shadowRadius: 2.0,
+                shadowOffset: CGSize(width: 0, height: -2)
+            )
+            StrokedTextView(
+                text: viewModel.displayTime,
+                font: preferences.clockFont, // Expects NSFont
+                textColor: preferences.textColor, // Expects NSColor
+                textOpacity: preferences.textOpacity,
+                strokeColor: NSColor.white.withAlphaComponent(0.0),
+                strokeWidth: -0.6, // Negative number forces AppKit to render fill AND stroke
+                shadowColor: NSColor.black.withAlphaComponent(0.0),
+                shadowRadius: 0.0,
+                shadowOffset: CGSize(width: 0, height: 0)
+            )
 
             WindowDragOverlay()
         }
