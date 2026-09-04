@@ -130,7 +130,7 @@ final class ClockPreferences: ObservableObject {
     }
 
     private static let availableFontFamilies = ["System"] + NSFontManager.shared.availableFontFamilies.sorted()
-    private static let defaultFontSize = 160.0
+    private static let defaultFontSize = 150.0
     private static let defaultTextColor = NSColor.systemYellow
     private static let defaultTextOpacity = 0.8
     private static let defaultFontFamily = validatedFontFamily(NSFont.systemFont(ofSize: CGFloat(defaultFontSize)).familyName ?? "")
@@ -315,6 +315,36 @@ final class DragView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
+        guard let window else { return }
+
+        let initialLocationInScreen = window.frame.origin
+        let initialMouseLocationInScreen = NSEvent.mouseLocation
+
+        while true {
+            guard
+                let nextEvent = window.nextEvent(
+                    matching: [.leftMouseDragged, .leftMouseUp],
+                    until: .distantFuture,
+                    inMode: .eventTracking,
+                    dequeue: true
+                )
+            else {
+                break
+            }
+
+            if nextEvent.type == .leftMouseUp {
+                break
+            }
+
+            let currentMouseLocationInScreen = NSEvent.mouseLocation
+            let deltaX = currentMouseLocationInScreen.x - initialMouseLocationInScreen.x
+            let deltaY = currentMouseLocationInScreen.y - initialMouseLocationInScreen.y
+
+            let newOrigin = NSPoint(
+                x: initialLocationInScreen.x + deltaX,
+                y: initialLocationInScreen.y + deltaY
+            )
+            window.setFrameOrigin(newOrigin)
+        }
     }
 }

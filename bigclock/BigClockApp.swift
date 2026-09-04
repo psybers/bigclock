@@ -29,6 +29,14 @@ private struct OpenSettingsAccessor: View {
     }
 }
 
+/// A panel that opts out of AppKit's automatic frame constraint, which otherwise
+/// prevents windows from being dragged over the menu bar.
+private final class ClockPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferences = ClockPreferences()
@@ -42,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
 
-        let panel = NSPanel(
+        let panel = ClockPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: 100, height: 100)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -50,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
 
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
