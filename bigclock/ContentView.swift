@@ -149,42 +149,37 @@ final class ClockViewModel: ObservableObject {
     private var timer: Timer?
 
     func start() {
-        displayTime = Self.formatter.string(from: Date())
-        scheduleInitialMinuteBoundaryUpdate()
+        updateFromSystemTime()
+        startTicking()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
     }
 
     deinit {
         timer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
 
-    private func scheduleInitialMinuteBoundaryUpdate() {
-        timer?.invalidate()
-
-        let now = Date()
-        let nextMinute = Calendar.autoupdatingCurrent.date(
-            bySetting: .second,
-            value: 0,
-            of: now.addingTimeInterval(60)
-        ) ?? now.addingTimeInterval(60)
-
-        let delay = max(0.1, nextMinute.timeIntervalSince(now))
-        timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.updateFromSystemTime()
-            self?.startMinuteTimer()
-        }
-        if let timer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+    @objc
+    private func handleWake() {
+        updateFromSystemTime()
     }
 
-    private func startMinuteTimer() {
+    private func startTicking() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // Tick every second (rather than trying to schedule exactly at the minute
+        // boundary) so the displayed time always reflects the real system clock,
+        // even across sleep/wake, clock changes, or timer drift.
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             self?.updateFromSystemTime()
         }
-        if let timer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     private func updateFromSystemTime() {
