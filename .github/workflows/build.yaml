@@ -16,7 +16,7 @@ jobs:
         run: |
           xcodebuild archive \
             -project BigClock.xcodeproj \
-            -scheme YourSchemeName \
+            -scheme BigClock \
             -configuration Release \
             -archivePath $RUNNER_TEMP/BigClock.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
