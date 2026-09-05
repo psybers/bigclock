@@ -161,39 +161,14 @@ final class ClockViewModel: ObservableObject {
     func start() {
         guard !isRunning else { return }
         isRunning = true
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleClockChange),
-            name: .NSSystemClockDidChange,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleClockChange),
-            name: .NSSystemTimeZoneDidChange,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleClockChange),
-            name: NSLocale.currentLocaleDidChangeNotification,
-            object: nil
-        )
+        installObservers()
         updateFromSystemTime()
         scheduleNextTick()
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWake),
-            name: NSWorkspace.didWakeNotification,
-            object: nil
-        )
     }
 
     deinit {
         timer?.invalidate()
-        NotificationCenter.default.removeObserver(self)
+        removeObservers()
     }
 
     @objc
@@ -220,6 +195,40 @@ final class ClockViewModel: ObservableObject {
     private func nextTickInterval(after date: Date) -> TimeInterval {
         let currentSecond = floor(date.timeIntervalSinceReferenceDate)
         return max(0.001, (currentSecond + 1) - date.timeIntervalSinceReferenceDate)
+    }
+
+    private func installObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: .NSSystemClockDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: .NSSystemTimeZoneDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: NSLocale.currentLocaleDidChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+
+    private func removeObservers() {
+        NotificationCenter.default.removeObserver(self, name: .NSSystemClockDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .NSSystemTimeZoneDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSLocale.currentLocaleDidChangeNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSWorkspace.didWakeNotification, object: nil)
     }
 
     private func updateFromSystemTime() {
