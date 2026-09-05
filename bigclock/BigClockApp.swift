@@ -352,17 +352,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
            let matchedScreen = screen(matching: placement) {
             let origin = restoredOrigin(for: panel.frame.size, placement: placement, in: matchedScreen.frame)
             panel.setFrameOrigin(origin)
-            saveClockPlacement(for: panel)
+            saveClockPlacement(for: panel, on: matchedScreen)
             return
         }
 
-        guard let screenFrame = (containingScreen(for: panel) ?? NSScreen.main ?? NSScreen.screens.first)?.frame else {
+        guard let targetScreen = containingScreen(for: panel) ?? NSScreen.main ?? NSScreen.screens.first else {
             return
         }
 
+        let screenFrame = targetScreen.frame
         let origin = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: screenFrame)
         panel.setFrameOrigin(origin)
-        saveClockPlacement(for: panel)
+        saveClockPlacement(for: panel, on: targetScreen)
     }
 
     private func resizeClockPanel(to contentSize: CGSize) {
@@ -407,7 +408,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func saveClockPlacement(for panel: NSPanel) {
         guard let screen = containingScreen(for: panel) else { return }
+        saveClockPlacement(for: panel, on: screen)
+    }
 
+    private func saveClockPlacement(for panel: NSPanel, on screen: NSScreen) {
         let visibleFrame = screen.frame
         let clamped = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: visibleFrame)
         let clampedFrame = NSRect(origin: clamped, size: panel.frame.size)
