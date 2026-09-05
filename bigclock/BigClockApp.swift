@@ -173,6 +173,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         clickThroughTimer?.invalidate()
     }
 
+    func applicationDidChangeScreenParameters(_ notification: Notification) {
+        repositionClockPanelForCurrentDisplays()
+    }
+
     /// Polls the mouse position and toggles `ignoresMouseEvents` on the clock panel so
     /// that clicks over transparent regions (outside the rendered clock text) pass through
     /// to whatever window is beneath, while clicks on the text itself remain interactive.
@@ -295,11 +299,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func containingScreen(for panel: NSPanel) -> NSScreen? {
         let panelFrame = panel.frame
-        let bestScreen = NSScreen.screens.max { lhs, rhs in
+        let screens = NSScreen.screens
+        let bestScreen = screens.max { lhs, rhs in
             intersectionArea(of: lhs.frame, with: panelFrame) < intersectionArea(of: rhs.frame, with: panelFrame)
         }
 
-        return bestScreen ?? panel.screen ?? NSScreen.main
+        if let bestScreen, intersectionArea(of: bestScreen.frame, with: panelFrame) > 0 {
+            return bestScreen
+        }
+
+        return panel.screen ?? NSScreen.main ?? screens.first
     }
 
     private func intersectionArea(of lhs: NSRect, with rhs: NSRect) -> CGFloat {
@@ -311,17 +320,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func place(panel: NSPanel) {
         let placement = placementStore.load()
         let matchedScreen = placement.flatMap { screen(matching: $0) }
-        let targetScreen = matchedScreen ?? NSScreen.main
-        guard let visibleFrame = targetScreen?.frame else { return }
+        let targetScreen = matchedScreen ?? NSScreen.main ?? NSScreen.screens.first
+        guard let screenFrame = targetScreen?.frame else { return }
 
         let origin: NSPoint
         if let placement, matchedScreen != nil {
-            origin = restoredOrigin(for: panel.frame.size, placement: placement, in: visibleFrame)
+            origin = restoredOrigin(for: panel.frame.size, placement: placement, in: screenFrame)
         } else {
-            origin = defaultOrigin(for: panel.frame.size, in: visibleFrame)
+            origin = defaultOrigin(for: panel.frame.size, in: screenFrame)
         }
 
         panel.setFrameOrigin(origin)
+    }
+
+    private func repositionClockPanelForCurrentDisplays() {
+        guard let panel = clockPanel else { return }
+
+        if let placement = placementStore.load(),
+           let matchedScreen = screen(matching: placement) {
+            let origin = restoredOrigin(for: panel.frame.size, placement: placement, in: matchedScreen.frame)
+            panel.setFrameOrigin(origin)
+            saveClockPlacement(for: panel)
+            return
+        }
+
+        guard let screenFrame = (containingScreen(for: panel) ?? NSScreen.main ?? NSScreen.screens.first)?.frame else {
+            return
+        }
+
+        let origin = clampedOrigin(for: panel.frame.size, proposedOrigin: panel.frame.origin, in: screenFrame)
+        panel.setFrameOrigin(origin)
+        saveClockPlacement(for: panel)
     }
 
     private func resizeClockPanel(to contentSize: CGSize) {
@@ -445,6 +474,20 @@ private struct ClockWindowPlacement: Codable {
     let displayID: UInt32?
     let horizontalFraction: Double
     let verticalFraction: Double
+
+    var sanitized: ClockWindowPlacement? {
+        guard horizontalFraction.isFinite, verticalFraction.isFinite else {
+            return nil
+        }
+
+        let trimmedUUID = displayUUID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ClockWindowPlacement(
+            displayUUID: trimmedUUID?.isEmpty == false ? trimmedUUID : nil,
+            displayID: displayID == 0 ? nil : displayID,
+            horizontalFraction: min(max(horizontalFraction, 0), 1),
+            verticalFraction: min(max(verticalFraction, 0), 1)
+        )
+    }
 }
 
 private struct ClockWindowPlacementStore {
@@ -462,11 +505,21 @@ private struct ClockWindowPlacementStore {
             return nil
         }
 
-        return placement
+        guard let sanitized = placement.sanitized else {
+            userDefaults.removeObject(forKey: Keys.placement)
+            return nil
+        }
+
+        return sanitized
     }
 
     func save(_ placement: ClockWindowPlacement) {
-        guard let data = try? JSONEncoder().encode(placement) else { return }
+        guard
+            let sanitized = placement.sanitized,
+            let data = try? JSONEncoder().encode(sanitized)
+        else {
+            return
+        }
         userDefaults.set(data, forKey: Keys.placement)
     }
 
