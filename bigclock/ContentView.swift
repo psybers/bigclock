@@ -168,7 +168,7 @@ final class ClockViewModel: ObservableObject {
 
     deinit {
         timer?.invalidate()
-        removeObservers()
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc
@@ -222,13 +222,6 @@ final class ClockViewModel: ObservableObject {
             name: NSWorkspace.didWakeNotification,
             object: nil
         )
-    }
-
-    private func removeObservers() {
-        NotificationCenter.default.removeObserver(self, name: .NSSystemClockDidChange, object: nil)
-        NotificationCenter.default.removeObserver(self, name: .NSSystemTimeZoneDidChange, object: nil)
-        NotificationCenter.default.removeObserver(self, name: NSLocale.currentLocaleDidChangeNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: NSWorkspace.didWakeNotification, object: nil)
     }
 
     private func updateFromSystemTime() {
