@@ -122,11 +122,20 @@ final class ClockPreferences: ObservableObject {
     }
 
     private static func validatedFontSize(_ candidate: Double) -> Double {
-        min(max(candidate, fontSizeRange.lowerBound), fontSizeRange.upperBound)
+        validated(candidate, defaultValue: defaultFontSize, in: fontSizeRange)
     }
 
     private static func validatedOpacity(_ candidate: Double) -> Double {
-        min(max(candidate, opacityRange.lowerBound), opacityRange.upperBound)
+        validated(candidate, defaultValue: defaultTextOpacity, in: opacityRange)
+    }
+
+    private static func validated(
+        _ candidate: Double,
+        defaultValue: Double,
+        in range: ClosedRange<Double>
+    ) -> Double {
+        guard candidate.isFinite else { return defaultValue }
+        return min(max(candidate, range.lowerBound), range.upperBound)
     }
 
     private static let availableFontFamilies = ["System"] + NSFontManager.shared.availableFontFamilies.sorted()
@@ -147,17 +156,14 @@ final class ClockPreferences: ObservableObject {
 final class ClockViewModel: ObservableObject {
     @Published private(set) var displayTime: String = ClockViewModel.formatter.string(from: Date())
     private var timer: Timer?
+    private var isRunning = false
 
     func start() {
+        guard !isRunning else { return }
+        isRunning = true
+        installObservers()
         updateFromSystemTime()
-        startTicking()
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWake),
-            name: NSWorkspace.didWakeNotification,
-            object: nil
-        )
+        scheduleNextTick()
     }
 
     deinit {
@@ -167,19 +173,55 @@ final class ClockViewModel: ObservableObject {
 
     @objc
     private func handleWake() {
-        updateFromSystemTime()
+        handleClockChange()
     }
 
-    private func startTicking() {
+    @objc
+    private func handleClockChange() {
+        updateFromSystemTime()
+        scheduleNextTick()
+    }
+
+    private func scheduleNextTick() {
         timer?.invalidate()
-        // Tick every second (rather than trying to schedule exactly at the minute
-        // boundary) so the displayed time always reflects the real system clock,
-        // even across sleep/wake, clock changes, or timer drift.
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            self?.updateFromSystemTime()
+        let timer = Timer(timeInterval: nextTickInterval(after: Date()), repeats: false) { [weak self] _ in
+            self?.handleClockChange()
         }
+        timer.tolerance = 0.05
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    private func nextTickInterval(after date: Date) -> TimeInterval {
+        let currentSecond = floor(date.timeIntervalSinceReferenceDate)
+        return max(0.001, (currentSecond + 1) - date.timeIntervalSinceReferenceDate)
+    }
+
+    private func installObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: .NSSystemClockDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: .NSSystemTimeZoneDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleClockChange),
+            name: NSLocale.currentLocaleDidChangeNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
     }
 
     private func updateFromSystemTime() {
