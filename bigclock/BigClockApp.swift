@@ -197,7 +197,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// would otherwise make it impossible to detect re-entry into an opaque region.
     private func installClickThroughMonitor() {
         let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            self?.updateClickThrough()
+            Task { @MainActor [weak self] in
+                self?.updateClickThrough()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         clickThroughTimer = timer

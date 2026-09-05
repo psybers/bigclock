@@ -185,7 +185,9 @@ final class ClockViewModel: ObservableObject {
     private func scheduleNextTick() {
         timer?.invalidate()
         let timer = Timer(timeInterval: nextTickInterval(after: Date()), repeats: false) { [weak self] _ in
-            self?.handleClockChange()
+            Task { @MainActor [weak self] in
+                self?.handleClockChange()
+            }
         }
         timer.tolerance = 0.05
         RunLoop.main.add(timer, forMode: .common)
