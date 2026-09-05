@@ -123,6 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenParametersChange),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: NSApp
+        )
 
         let panel = ClockPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: 100, height: 100)),
@@ -171,9 +177,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         saveClockPlacement()
         clickThroughTimer?.invalidate()
+        NotificationCenter.default.removeObserver(
+            self,
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: NSApp
+        )
     }
 
-    func applicationDidChangeScreenParameters(_ notification: Notification) {
+    @objc
+    private func handleScreenParametersChange(_ notification: Notification) {
         repositionClockPanelForCurrentDisplays()
     }
 
