@@ -15,7 +15,7 @@ has now is probably the most I will ever put into it. I welcome bug fix PRs.
 The easiest way to install is via Homebrew:
 
 ```sh
-brew trust --cask hashicorp/tap/hashicorp-vagrant
+brew trust --cask psybers/homebrew-tap/bigclock
 xattr -d com.apple.quarantine /Applications/BigClock.app
 ```
 
