@@ -23,6 +23,13 @@ Note that if you don't remove the quarantine, the app won't run.  You can do
 that with the above command, or by going into Settings and allowing the program
 to run.
 
+## Updating
+
+```sh
+brew upgrade psybers/tap/bigclock
+xattr -d com.apple.quarantine /Applications/BigClock.app
+```
+
 ## Building From Source
 
 Open `BigClock.xcodeproj` in Xcode and build the `BigClock` scheme.
