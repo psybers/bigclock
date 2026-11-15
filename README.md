@@ -16,6 +16,7 @@ The easiest way to install is via Homebrew:
 
 ```sh
 brew trust --cask psybers/homebrew-tap/bigclock
+brew install --cask psybers/homebrew-tap/bigclock
 xattr -d com.apple.quarantine /Applications/BigClock.app
 ```
 
